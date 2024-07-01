@@ -1,4 +1,5 @@
-﻿using Quartz;
+﻿using AutoMapper;
+using Quartz;
 using QuartzExample.Application.Services;
 using QuartzExample.Application.ViewModels;
 using QuartzExample.Domain.Aggregates.TicketAggregate;
@@ -9,10 +10,12 @@ namespace QuartzExample.Infrastructure.Jobs;
 
 public class TicketModifiedJob(
     IRepository<Ticket> repository,
-    IStreamTicketModifiedService stream) : IJob
+    IStreamTicketModifiedService stream,
+    IMapper mapper) : IJob
 {
     private readonly IRepository<Ticket> _repository = repository;
     private readonly IStreamTicketModifiedService _stream = stream;
+    private readonly IMapper _mapper = mapper;
     private static DateTimeOffset _lastUpdated = DateTimeOffset.MinValue;
 
     public async Task Execute(IJobExecutionContext context)
@@ -31,27 +34,7 @@ public class TicketModifiedJob(
 
         foreach (var ticket in tickets)
         {
-            var ticketVM = new TicketViewModel
-            {
-                Id = ticket.Id,
-                Title = ticket.Title,
-                Description = ticket.Description,
-                AssignedId = ticket.AssigneeId,
-                DeadLine = ticket.DeadLineDate,
-                CreatedAt = ticket.Created.At,
-                CreatedBy = ticket.Created.ByUserId,
-                ModifiedAt = ticket.Modified?.At,
-                ModifiedBy = ticket.Modified?.ByUserId,
-                Notes = ticket.Notes.Select(n => new NoteViewModel
-                {
-                    Id = n.Id,
-                    Content = n.Content,
-                    CreatedAt = n.Created.At,
-                    CreatedBy = n.Created.ByUserId,
-                    ModifiedAt = n.Modified?.At,
-                    ModifiedBy = n.Modified?.ByUserId
-                }).ToList()
-            };
+            var ticketVM = _mapper.Map<TicketViewModel>(ticket);
 
             _stream.AddMessage(ticketVM);
             _lastUpdated = DateTimeOffset.UtcNow;

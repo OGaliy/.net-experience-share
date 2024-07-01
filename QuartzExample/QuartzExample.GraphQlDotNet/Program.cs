@@ -1,7 +1,6 @@
 using GraphQL;
-using GraphQL.DataLoader;
+using GraphQL.Server.Ui.Playground;
 using GraphQL.Types;
-using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.WebSockets;
 using Microsoft.EntityFrameworkCore;
 using Quartz;
@@ -23,8 +22,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddResponseCompression();
 builder.Services.AddDbContext<TicketDbContext>(opt =>
 {
-    opt.UseSqlServer("Integrated Security=SSPI;Initial Catalog=TestDb123;Data Source=OHALII-N2;TrustServerCertificate=True;");
-}, ServiceLifetime.Transient);
+    opt.UseSqlServer(builder.Configuration.GetConnectionString("TicketsDB"));
+}, ServiceLifetime.Transient); // Transient is used for adding ability to run multiple queries
 
 builder.Services.AddTransient(typeof(IRepository<>), typeof(EfRepository<>));
 builder.Services.AddSingleton<IStreamTicketModifiedService, StreamTicketModifiedService>();
@@ -32,8 +31,6 @@ builder.Services.AddSingleton<TicketSubscription>();
 builder.Services.AddSingleton<TicketQuery>();
 builder.Services.AddSingleton<TicketMutation>();
 builder.Services.AddSingleton<ISchema, TicketSchema>();
-//builder.Services.AddSingleton<IDataLoaderContextAccessor, DataLoaderContextAccessor>();
-//builder.Services.AddSingleton<DataLoaderDocumentListener>();
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblies(Assembly.GetExecutingAssembly()));
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(TicketsGetQuery).Assembly));
 builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(TicketsGetQueryHandler).Assembly));
@@ -49,6 +46,7 @@ builder.Services.AddQuartz(q =>
     q.AddTrigger(opts => opts
            .ForJob(jobKey)
            .WithIdentity(jobName + "-trigger")
+           // Run every 5 seconds
            .WithCronSchedule("*/5 * * * * ?"));
 });
 
@@ -81,17 +79,8 @@ builder.Services.AddControllers(opt =>
 {
     opt.RespectBrowserAcceptHeader = true;
 });
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-//builder.Services.AddEndpointsApiExplorer();
-//builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
-
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-
-}
 
 app.UseRouting();
 
@@ -103,7 +92,7 @@ app.MapControllers();
 app.UseWebSockets();
 app.UseCors("CorsPolicy");
 app.UseGraphQL<ISchema>("/graphql");
-app.UseGraphQLPlayground(options: new GraphQL.Server.Ui.Playground.PlaygroundOptions 
+app.UseGraphQLPlayground(options: new PlaygroundOptions 
 { 
     SchemaPollingEnabled = false,
     GraphQLEndPoint = "/graphql",
